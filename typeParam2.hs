@@ -1,6 +1,6 @@
-
 --Solving the effect problem, using type parameter.
---a generic type 'r' is used to denote that an effectless instruction can be run in any context.
+--The effectless instructions are marked with 'NoEffect', but to run them in an effect-full context,
+--we are obliged to unsafeCoerce them.
 
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures, DataKinds, ScopedTypeVariables, 
@@ -10,11 +10,13 @@ module Main where
 
 import Control.Monad.State
 import Control.Monad.Reader
+import Unsafe.Coerce
+
 
 data Effects = Effect | NoEffect
 
 data Nomex :: Effects -> * -> * where
-  ReadAccount  :: Nomex r Int            --ReadAccount has no effect: it can be run in whatever monad
+  ReadAccount  :: Nomex NoEffect Int            --ReadAccount has no effect: it can be run in whatever monad
   WriteAccount :: Int -> Nomex Effect ()  --WriteAccount has effect
   SetVictory   :: Nomex NoEffect Bool -> Nomex Effect () --SetVictory don't accept effectful computations
   Bind         :: Nomex m a -> (a -> Nomex m b) -> Nomex m b
@@ -37,21 +39,21 @@ data Game = Game { victory :: Nomex NoEffect Bool,
                    account :: Int}
 
 evalEffect :: Nomex Effect a -> State Game a 
-evalEffect ReadAccount      = liftEval ReadAccount
-evalEffect (WriteAccount a) = modify (\g -> g{account = a})
-evalEffect (SetVictory v)   = modify (\g -> g{victory = v})
-evalEffect (Return a)       = liftEval (Return a)
-evalEffect (Bind exp f)     = evalEffect exp >>= evalEffect . f
+evalEffect (WriteAccount a)   = modify (\g -> g{account = a})
+evalEffect (SetVictory v)     = modify (\g -> g{victory = v})
+evalEffect (Return a)         = liftEval $ evalNoEffect (Return a)
+evalEffect (Bind exp f)       = evalEffect exp >>= evalEffect . f
 
 evalNoEffect :: Nomex NoEffect a -> Reader Game a
-evalNoEffect ReadAccount  = asks account
-evalNoEffect (Return a)   = return a
+evalNoEffect ReadAccount = asks account
+evalNoEffect (Return a) = return a
 evalNoEffect (Bind exp f) = evalNoEffect exp >>= evalNoEffect . f
 
-liftEval :: Nomex NoEffect a -> State Game a
-liftEval r = do
-   g <- get 
-   return $ runReader (evalNoEffect r) g 
+liftEval :: Reader Game a -> State Game a
+liftEval r = get >>= return . runReader r 
+
+liftEffect :: Nomex NoEffect a -> Nomex Effect a
+liftEffect = unsafeCoerce
 
 play :: Nomex Effect ()
 play = do
