@@ -1,7 +1,8 @@
 --Solving the effect problem, using type parameter.
 --The effectless instructions are marked with 'NoEffect', but to run them in an effect-full context,
 --we are obliged to unsafeCoerce them.
-
+--Here we are trying to type ReadAccount :: Nomex NoEffect Int, as it is more intuitive.
+--
 --update: this is not working
 
 {-# LANGUAGE GADTs #-}
