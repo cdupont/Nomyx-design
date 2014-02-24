@@ -1,4 +1,5 @@
 
+--Solving the effect problem, using type classes.
 
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleInstances #-}

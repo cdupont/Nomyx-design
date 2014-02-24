@@ -1,6 +1,8 @@
 
 --Solving the effect problem, using type parameter.
 --a generic type 'r' is used to denote that an effectless instruction can be run in any context.
+--Pro: it avoids to have to use a liftEffect and unsafeCoerce (see typeParam2.hs)
+--Cons: the type signatures are less elegant
 
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures, DataKinds, ScopedTypeVariables, 
@@ -14,8 +16,8 @@ import Control.Monad.Reader
 data Effects = Effect | NoEffect
 
 data Nomex :: Effects -> * -> * where
-  ReadAccount  :: Nomex r Int            --ReadAccount has no effect: it can be run in whatever monad
-  WriteAccount :: Int -> Nomex Effect ()  --WriteAccount has effect
+  ReadAccount  :: Nomex r Int              --ReadAccount has no effect: it can be run in whatever monad
+  WriteAccount :: Int -> Nomex Effect ()   --WriteAccount has effect
   SetVictory   :: Nomex NoEffect Bool -> Nomex Effect () --SetVictory don't accept effectful computations
   Bind         :: Nomex m a -> (a -> Nomex m b) -> Nomex m b
   Return       :: a -> Nomex r a  --wrapping a constant has no effect
