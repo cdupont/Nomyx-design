@@ -1,7 +1,6 @@
-
 --Solving the effect problem, using type parameter.
 --a generic type 'r' is used to denote that an effectless instruction can be run in any context.
---Pro: it avoids to have to use a liftEffect and unsafeCoerce (see typeParam2.hs)
+--Pro: it avoids to have to use a liftEffect (see TypeParamEffect-Concrete.hs)
 --Cons: the type signatures are less elegant
 
 {-# LANGUAGE GADTs #-}
