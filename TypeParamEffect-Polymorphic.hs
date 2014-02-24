@@ -27,13 +27,15 @@ instance Monad (Nomex a) where
   (>>=) = Bind
 
 moreMoney :: Nomex Effect ()
-moreMoney = WriteAccount 200
+moreMoney = do
+   a <- ReadAccount
+   WriteAccount (a + 200)
 
 winCondition :: Nomex NoEffect Bool
 winCondition = do
    a <- ReadAccount
    --WriteAccount a
-   return (a > 100)
+   return (a == 200)
 
 data Game = Game { victory :: Nomex NoEffect Bool,
                    account :: Int}

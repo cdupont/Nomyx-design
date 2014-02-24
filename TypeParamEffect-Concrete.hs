@@ -2,6 +2,8 @@
 --The effectless instructions are marked with 'NoEffect', but to run them in an effect-full context,
 --we are obliged to unsafeCoerce them.
 
+--update: this is not working
+
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures, DataKinds, ScopedTypeVariables, 
    MultiParamTypeClasses, FunctionalDependencies, FlexibleInstances, UndecidableInstances #-}
@@ -35,7 +37,7 @@ winCondition :: Nomex NoEffect Bool
 winCondition = do
    a <- ReadAccount
    --WriteAccount a
-   return (a > 100)
+   return (a == 200)
 
 data Game = Game { victory :: Nomex NoEffect Bool,
                    account :: Int}
