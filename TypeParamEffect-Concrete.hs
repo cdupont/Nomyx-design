@@ -1,9 +1,6 @@
 --Solving the effect problem, using type parameter.
---The effectless instructions are marked with 'NoEffect', but to run them in an effect-full context,
---we are obliged to unsafeCoerce them.
---Here we are trying to type ReadAccount :: Nomex NoEffect Int, as it is more intuitive.
---
---update: this is not working
+--The effectless instructions are marked with 'NoEffect'. To run them in an effect-full context,
+--we are obliged to `liftNoEffect` them.
 
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures, DataKinds, ScopedTypeVariables, 
@@ -13,17 +10,16 @@ module Main where
 
 import Control.Monad.State
 import Control.Monad.Reader
-import Unsafe.Coerce
-
 
 data Effects = Effect | NoEffect
 
 data Nomex :: Effects -> * -> * where
-  ReadAccount  :: Nomex NoEffect Int            --ReadAccount has no effect: it can be run in whatever monad
-  WriteAccount :: Int -> Nomex Effect ()  --WriteAccount has effect
-  SetVictory   :: Nomex NoEffect Bool -> Nomex Effect () --SetVictory don't accept effectful computations
+  ReadAccount  :: Nomex NoEffect Int                          --ReadAccount has no effect
+  WriteAccount :: Int -> Nomex Effect ()                      --WriteAccount has effect
+  SetVictory   :: Nomex NoEffect Bool -> Nomex Effect ()      --SetVictory don't accept effectful computations
   Bind         :: Nomex m a -> (a -> Nomex m b) -> Nomex m b
-  Return       :: a -> Nomex r a  --wrapping a constant has no effect
+  Return       :: a -> Nomex r a                              
+  NoEff        :: Nomex NoEffect a -> Nomex Effect a          --Wrapping an effect-less instruction into an effect-full one
 
 instance Monad (Nomex a) where
   return = Return
@@ -31,7 +27,7 @@ instance Monad (Nomex a) where
 
 moreMoney :: Nomex Effect ()
 moreMoney = do
-   a <- liftEffect ReadAccount   
+   a <- liftNoEffect ReadAccount   
    WriteAccount (a + 200)
 
 winCondition :: Nomex NoEffect Bool
@@ -48,6 +44,7 @@ evalEffect (WriteAccount a)   = modify (\g -> g{account = a})
 evalEffect (SetVictory v)     = modify (\g -> g{victory = v})
 evalEffect (Return a)         = liftEval $ evalNoEffect (Return a)
 evalEffect (Bind exp f)       = evalEffect exp >>= evalEffect . f
+evalEffect (NoEff a)          = liftEval $ evalNoEffect a
 
 evalNoEffect :: Nomex NoEffect a -> Reader Game a
 evalNoEffect ReadAccount = asks account
@@ -57,8 +54,8 @@ evalNoEffect (Bind exp f) = evalNoEffect exp >>= evalNoEffect . f
 liftEval :: Reader Game a -> State Game a
 liftEval r = get >>= return . runReader r 
 
-liftEffect :: Nomex NoEffect a -> Nomex Effect a
-liftEffect = unsafeCoerce
+liftNoEffect :: Nomex NoEffect a -> Nomex Effect a
+liftNoEffect = NoEff 
 
 play :: Nomex Effect ()
 play = do
