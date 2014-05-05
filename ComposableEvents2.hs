@@ -23,20 +23,14 @@ type PlayerNumber = Int
 type EventRef = Int
 
 data Event a where
+   OnInputText :: PlayerNumber -> Event String   -- A textbox will be created for the player. When filled, this event will fire and return the result
+   OnInputCheckbox :: PlayerNumber -> Event Bool -- Idem with a checkbox
+   OnInputButton :: PlayerNumber -> Event ()     -- Idem with a button
+   OnTime :: UTCTime -> Event ()                 -- time event
    EventSum :: Event a -> Event a -> Event a   -- The first event to fire will be returned
    EventProduct :: Event (a -> b) -> Event a -> Event b  -- both events should fire, and then the result is returned
    Pure :: a -> Event a  -- Create a fake event. The result is useable with no delay.
    Empty :: Event a -- An event that is never fired. 
-   EventInput :: InputValue a -> Event a
-
-data InputValue a = Input (OnInput a) | Value a  
-
-data OnInput a where
-   OnInputText :: PlayerNumber -> OnInput String   -- A textbox will be created for the player. When filled, this event will fire and return the result
-   OnInputCheckbox :: PlayerNumber -> OnInput Bool -- Idem with a checkbox
-   OnInputButton :: PlayerNumber -> OnInput ()     -- Idem with a button
-   OnTime :: UTCTime -> OnInput ()                 -- time event
-
 
 instance Functor Event where
    fmap f a = pure f <*> a
@@ -54,10 +48,10 @@ instance Alternative Event where
 --   traverse f (Pure x) = Pure <$> f x
 --   traverse f (EventSum a b) = f a <|> f b
 
-onInputText = EventInput . Input . OnInputText
-onInputCheckbox = EventInput . Input . OnInputCheckbox
-onInputButton = EventInput . Input . OnInputButton
-onTime = EventInput . Input . OnTime
+onInputText = OnInputText
+onInputCheckbox = OnInputCheckbox
+onInputButton = OnInputButton
+onTime = OnTime
 
 -- A product type
 data MyRecord = MyRecord String Bool deriving Show
@@ -107,45 +101,37 @@ data Nomex a where
 data Game = Game { _events :: [EventHandler],
                    _outputs :: [String]}
 
-type EventNumber = Int
-
 data EventHandler where 
    EventHandler :: 
-      { _eventNumber :: EventNumber,
-        _event :: Event e,
+      { _event :: Event e,
         _handler :: e -> Nomex ()} -> EventHandler
 
 makeLenses ''Game
 makeLenses ''EventHandler
 
-data Environment i 
-   = Environment { inputs :: [(EventRef, Maybe i)]}
-
 --Evaluation
 evalNomex :: Nomex a -> StateT Game IO a
-evalNomex (OnEvent e h) = events %= (EventHandler 1 e h :)
+evalNomex (OnEvent e h) = events %= (EventHandler e h :)
 evalNomex (Output s) = outputs %= (s:)
    
-
-askInput :: OnInput a -> IO (Maybe a)
-askInput (OnInputText pn) = do
+updateInput :: Event a -> IO (Event a)
+updateInput (OnInputText pn) = do
    putStrLn $ "Player " ++ (show pn) ++ ": enter text"
    s <- getLine
-   return $ Just s
-askInput (OnInputButton pn) = do
+   return $ pure s
+updateInput i@(OnInputButton pn) = do
    putStrLn $ "Player " ++ (show pn) ++ ": press b"
    s <- getChar
-   return $ if s == 'b' then Just () else Nothing
-askInput (OnInputCheckbox pn) = do
+   return $ if s == 'b' then pure () else i
+updateInput i@(OnInputCheckbox pn) = do
    putStrLn $ "Player " ++ (show pn) ++ ": enter True/False"
    s <- getLine
-   return $ readMay s
-askInput (OnTime t) = do
+   return $ case (readMay s) of
+      Just b -> pure b
+      Nothing -> i
+updateInput i@(OnTime t) = do
    now <- getCurrentTime
-   return $ if now > t then Just () else Nothing
-
-
-updateInput :: Event a -> IO (Event a)
+   return $ if now > t then pure () else i
 updateInput (EventSum a b) = do
    na <- (updateInput a)
    nb <- (updateInput b)
@@ -154,11 +140,6 @@ updateInput (EventProduct a b) = do
    na <- (updateInput a) 
    nb <- (updateInput b)
    return $ na <*> nb
-updateInput (EventInput (Input a)) = do
-   mr <- askInput a
-   case mr of
-      Just r -> return $ EventInput $ Value r
-      Nothing -> return $ EventInput $ Input a
 updateInput a = return a
 
 getEventValue :: Event a -> Maybe a 
@@ -166,17 +147,16 @@ getEventValue (Pure a) = Just a
 getEventValue Empty = Nothing
 getEventValue (EventSum a b) = (getEventValue a) <|> (getEventValue b)
 getEventValue (EventProduct a b) = (getEventValue a) <*> (getEventValue b)
-getEventValue (EventInput (Value a)) = Just a
-getEventValue (EventInput _) = Nothing
+getEventValue _ = Nothing
 
 updateInputs :: StateT EventHandler IO ()
 updateInputs = do 
-   (EventHandler n e h) <- get
+   (EventHandler e h) <- get
    e' <- liftIO $ updateInput e
-   put $ EventHandler n e' h
+   put $ EventHandler e' h
 
 triggerEvents :: EventHandler -> StateT Game IO ()
-triggerEvents (EventHandler n e h) = do
+triggerEvents (EventHandler e h) = do
    let mval = getEventValue e
    when (isJust mval) $ do
       evalNomex $ h $ fromJust mval
