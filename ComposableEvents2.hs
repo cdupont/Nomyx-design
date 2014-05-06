@@ -29,8 +29,12 @@ data Event a where
    OnTime :: UTCTime -> Event ()                 -- time event
    EventSum :: Event a -> Event a -> Event a   -- The first event to fire will be returned
    EventProduct :: Event (a -> b) -> Event a -> Event b  -- both events should fire, and then the result is returned
+   Bind :: Event a -> (a -> Event b) -> Event b
    Pure :: a -> Event a  -- Create a fake event. The result is useable with no delay.
    Empty :: Event a -- An event that is never fired. 
+
+--instance Functor Event where
+--   fmap f a = pure f <*> a
 
 instance Functor Event where
    fmap f a = pure f <*> a
@@ -43,6 +47,9 @@ instance Alternative Event where
    (<|>) = EventSum
    empty = Empty
 
+instance Monad Event where
+   (>>=) = Bind
+   return = pure
 --instance Traversable Event where
 --   traverse f Empty = pure Empty
 --   traverse f (Pure x) = Pure <$> f x
@@ -73,7 +80,7 @@ onInputMyRecord = MyRecord <$> onInputText 1 <*> onInputCheckbox 1
 -- Using the Alternative instance, we build a sum type.
 -- The event callback should be called when the first event have fired.
 onInputMyAlternative :: Event MyAlternative
-onInputMyAlternative = (const A <$> onInputButton 1) <|> (const B <$> onInputButton 1)
+onInputMyAlternative = (A <$ onInputButton 1) <|> (B <$ onInputButton 1)
 
 allPlayers = [1 .. 2]
 
@@ -82,7 +89,7 @@ voteEvent :: UTCTime -> Event ([Maybe Bool])
 voteEvent time = sequenceA $ map (singleVote time) allPlayers
 
 singleVote :: UTCTime -> PlayerNumber -> Event (Maybe Bool)
-singleVote timeLimit pn = (Just <$> onInputCheckbox pn) <|> (const Nothing <$> onTime timeLimit)
+singleVote timeLimit pn = (Just <$> onInputCheckbox pn) <|> (Nothing <$ onTime timeLimit)
 
 vote :: UTCTime -> Event Bool
 vote timeLimit = unanimity <$> (voteEvent timeLimit)
@@ -117,8 +124,7 @@ evalNomex (Output s) = outputs %= (s:)
 updateInput :: Event a -> IO (Event a)
 updateInput (OnInputText pn) = do
    putStrLn $ "Player " ++ (show pn) ++ ": enter text"
-   s <- getLine
-   return $ pure s
+   pure <$> getLine
 updateInput i@(OnInputButton pn) = do
    putStrLn $ "Player " ++ (show pn) ++ ": press b"
    s <- getChar
@@ -140,7 +146,9 @@ updateInput (EventProduct a b) = do
    na <- (updateInput a) 
    nb <- (updateInput b)
    return $ na <*> nb
-updateInput a = return a
+--updateInput (Bind a f) = do
+--   na <- (updateInput a) 
+--   return $ f na   
 
 getEventValue :: Event a -> Maybe a 
 getEventValue (Pure a) = Just a
