@@ -117,11 +117,9 @@ evalNomex (OnEvent e h) = events %= (EventHandler e h :)
 evalNomex (Output s) = outputs %= (s:)
 
 updateInput :: (Typeable b) => Event a -> (BEvent b, b) -> Event a
-updateInput (Base a) (be, b) = if a === be then 
-      case (cast b) of
-          Just b1 -> Pure b1
-          Nothing -> Base a
-   else Base a
+updateInput (Base a) r = case (cast r) of
+   Just (be, b) | a == be -> Pure b
+   _                      -> Base a
 updateInput (Sum e1 e2) r = Sum (updateInput e1 r) (updateInput e2 r)
 updateInput (Prod f e) r = Prod (updateInput f r) (updateInput e r)
 updateInput (Pure e) _ = Pure e
